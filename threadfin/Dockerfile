@@ -1,11 +1,11 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.22-alpine AS builder
 RUN apk add --no-cache git
 RUN git clone https://github.com/Threadfin/Threadfin.git /src
 WORKDIR /src
 RUN go build -o threadfin .
 
-FROM alpine:3.19
-RUN apk add --no-cache ca-certificates tzdata
+FROM alpine:3.21
+RUN apk update && apk add --no-cache ca-certificates tzdata
 RUN adduser -D -h /home/threadfin threadfin
 WORKDIR /home/threadfin
 COPY --from=builder /src/threadfin ./threadfin

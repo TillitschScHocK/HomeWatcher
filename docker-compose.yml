@@ -1,8 +1,6 @@
-version: "3.9"
-
 services:
 
-  # ── 1. VPN ────────────────────────────────────────────────────────────────────
+  # --- 1. VPN ----------------------------------------------------------------
   vpn:
     image: dperson/openvpn-client:latest
     container_name: homewatcher-vpn
@@ -12,7 +10,6 @@ services:
     devices:
       - /dev/net/tun
     environment:
-      # Keep local LAN reachable (split tunnel)
       - ROUTE=192.168.0.0/16
     volumes:
       - ./vpn/ca.crt:/vpn/ca.crt:ro
@@ -29,7 +26,7 @@ services:
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
 
-  # ── 2. IPTV Proxy (Threadfin) ─────────────────────────────────────────────────
+  # --- 2. IPTV Proxy (Threadfin) ---------------------------------------------
   threadfin:
     build:
       context: ./threadfin
@@ -46,7 +43,7 @@ services:
       - ./threadfin/config:/home/threadfin/conf
       - ./threadfin/data:/home/threadfin/data
 
-  # ── 3. Stream-Gate microservice ───────────────────────────────────────────────
+  # --- 3. Stream-Gate microservice -------------------------------------------
   stream-gate:
     build:
       context: ./stream-gate
@@ -58,9 +55,8 @@ services:
         condition: service_healthy
     cap_add:
       - NET_ADMIN
-    # Port 8080 is reached via the vpn container's network stack
 
-  # ── 4. Web UI (Nginx reverse proxy + SPA) ─────────────────────────────────────
+  # --- 4. Web UI (Nginx + SPA) -----------------------------------------------
   webui:
     build:
       context: ./webui
@@ -73,7 +69,7 @@ services:
     ports:
       - "${UI_PORT:-1966}:80"
 
-  # ── 5. Watchtower (daily auto-update at 04:00) ─────────────────────────────────
+  # --- 5. Watchtower (daily auto-update at 04:00) ----------------------------
   watchtower:
     image: containrrr/watchtower:latest
     container_name: homewatcher-watchtower
