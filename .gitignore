@@ -1,0 +1,20 @@
+# VPN credentials and certificates – NEVER commit these
+vpn/ca.crt
+vpn/client.crt
+vpn/client.key
+vpn/openvpn.ovpn
+vpn/credentials.txt
+
+# Environment files
+.env
+
+# Generated container configs
+threadfin/config/
+threadfin/data/
+
+# OS / editor artifacts
+.DS_Store
+*.swp
+*.bak
+__pycache__/
+*.pyc

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HomeWatcher</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+</head>
+<body>
+
+<header>
+  <div class="brand">📺 HomeWatcher</div>
+  <div class="header-controls">
+    <input id="search" type="text" placeholder="Search channels…" />
+    <select id="categoryFilter"><option value="">All categories</option></select>
+    <button id="gateBtn" class="gate-btn gate-open" onclick="toggleGate()">🟢 Streams ON</button>
+  </div>
+</header>
+
+<main>
+  <aside id="sidebar">
+    <div id="channelList"></div>
+  </aside>
+
+  <section id="playerSection">
+    <video id="player" controls autoplay></video>
+    <div id="nowPlaying"></div>
+  </section>
+
+  <aside id="epgPanel">
+    <h3>EPG</h3>
+    <div id="epgContent">Select a channel to view the programme guide.</div>
+  </aside>
+</main>
+
+<div id="toastContainer"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

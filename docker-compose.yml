@@ -1,0 +1,86 @@
+version: "3.9"
+
+services:
+
+  # ── 1. VPN ────────────────────────────────────────────────────────────────────
+  vpn:
+    image: dperson/openvpn-client:latest
+    container_name: homewatcher-vpn
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      # Keep local LAN reachable (split tunnel)
+      - ROUTE=192.168.0.0/16
+    volumes:
+      - ./vpn/ca.crt:/vpn/ca.crt:ro
+      - ./vpn/client.crt:/vpn/client.crt:ro
+      - ./vpn/client.key:/vpn/client.key:ro
+      - ./vpn/openvpn.ovpn:/vpn/vpn.conf:ro
+      - ./vpn/credentials.txt:/vpn/credentials.txt:ro
+    healthcheck:
+      test: ["CMD-SHELL", "ip route | grep tun0 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+
+  # ── 2. IPTV Proxy (Threadfin) ─────────────────────────────────────────────────
+  threadfin:
+    build:
+      context: ./threadfin
+    container_name: homewatcher-threadfin
+    restart: unless-stopped
+    network_mode: service:vpn
+    depends_on:
+      vpn:
+        condition: service_healthy
+    environment:
+      - M3U_URL=${M3U_URL}
+      - EPG_URL=${EPG_URL}
+    volumes:
+      - ./threadfin/config:/home/threadfin/conf
+      - ./threadfin/data:/home/threadfin/data
+
+  # ── 3. Stream-Gate microservice ───────────────────────────────────────────────
+  stream-gate:
+    build:
+      context: ./stream-gate
+    container_name: homewatcher-stream-gate
+    restart: unless-stopped
+    network_mode: service:vpn
+    depends_on:
+      vpn:
+        condition: service_healthy
+    cap_add:
+      - NET_ADMIN
+    # Port 8080 is reached via the vpn container's network stack
+
+  # ── 4. Web UI (Nginx reverse proxy + SPA) ─────────────────────────────────────
+  webui:
+    build:
+      context: ./webui
+    container_name: homewatcher-webui
+    restart: unless-stopped
+    network_mode: service:vpn
+    depends_on:
+      vpn:
+        condition: service_healthy
+    ports:
+      - "${UI_PORT:-1966}:80"
+
+  # ── 5. Watchtower (daily auto-update at 04:00) ─────────────────────────────────
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: homewatcher-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=${WATCHTOWER_CLEANUP:-true}
+      - WATCHTOWER_SCHEDULE=0 0 4 * * *
+      - WATCHTOWER_LABEL_ENABLE=false
