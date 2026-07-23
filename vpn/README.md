@@ -28,6 +28,6 @@ your_cyberghost_password
 
 ## Split tunnel
 
-The `ROUTE=192.168.0.0/16` environment variable in `docker-compose.yml` keeps your
-local LAN reachable without going through the VPN tunnel.
-Adjust the subnet if your LAN uses a different range.
+The `LAN_SUBNET` variable in `.env` (default `192.168.0.0/16`) keeps your local
+network reachable without going through the VPN tunnel. Adjust it if your LAN
+uses a different range.

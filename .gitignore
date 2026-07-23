@@ -5,12 +5,15 @@ vpn/client.key
 vpn/openvpn.ovpn
 vpn/credentials.txt
 
-# Environment files
+# Environment file
 .env
 
-# Generated container configs
-threadfin/config/
-threadfin/data/
+# Node dependencies
+frontend/node_modules/
+backend/node_modules/
+
+# Frontend build output
+frontend/dist/
 
 # OS / editor artifacts
 .DS_Store

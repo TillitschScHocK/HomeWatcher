@@ -1,6 +1,7 @@
 services:
 
-  # --- 1. VPN ----------------------------------------------------------------
+  # --- 1. VPN (CyberGhost via OpenVPN) ---------------------------------------
+  # All outbound traffic from backend and nginx is routed through this container.
   vpn:
     image: dperson/openvpn-client:latest
     container_name: homewatcher-vpn
@@ -10,7 +11,8 @@ services:
     devices:
       - /dev/net/tun
     environment:
-      - ROUTE=192.168.0.0/16
+      # Keep local LAN reachable without going through the VPN (split tunnel)
+      - ROUTE=${LAN_SUBNET:-192.168.0.0/16}
     volumes:
       - ./vpn/ca.crt:/vpn/ca.crt:ro
       - ./vpn/client.crt:/vpn/client.crt:ro
@@ -26,46 +28,58 @@ services:
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
 
-  # --- 2. IPTV Proxy (Threadfin) ---------------------------------------------
-  threadfin:
+  # --- 2. IPTV-Restream Frontend (React/Vite, built via Node) ----------------
+  iptv_restream_frontend:
     build:
-      context: ./threadfin
-    container_name: homewatcher-threadfin
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_STREAM_DELAY: ${VITE_STREAM_DELAY:-18}
+        VITE_STREAM_PROXY_DELAY: ${VITE_STREAM_PROXY_DELAY:-30}
+        # Uncomment to override backend URL if needed:
+        # VITE_BACKEND_URL: http://192.168.1.x:1966
+    container_name: homewatcher-frontend
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # --- 3. IPTV-Restream Backend (Node.js + ffmpeg) ---------------------------
+  # Routes all outbound stream traffic through the VPN.
+  iptv_restream_backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: homewatcher-backend
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
       vpn:
         condition: service_healthy
-    environment:
-      - M3U_URL=${M3U_URL}
-      - EPG_URL=${EPG_URL}
     volumes:
-      - ./threadfin/config:/home/threadfin/conf
-      - ./threadfin/data:/home/threadfin/data
+      - streams_data:/streams
+      - channels:/channels
+    environment:
+      STORAGE_PATH: /streams/
+      # Uncomment to set the backend URL manually:
+      # BACKEND_URL: http://localhost:5000
 
-  # --- 3. Stream-Gate microservice -------------------------------------------
-  stream-gate:
-    build:
-      context: ./stream-gate
-    container_name: homewatcher-stream-gate
+  # --- 4. Nginx Reverse Proxy (exposes the UI on port 1966) ------------------
+  # Also shares the VPN network so stream proxying goes through the tunnel.
+  iptv_restream_nginx:
+    image: nginx:alpine
+    container_name: homewatcher-nginx
     restart: unless-stopped
     network_mode: service:vpn
     depends_on:
       vpn:
         condition: service_healthy
-    cap_add:
-      - NET_ADMIN
-
-  # --- 4. Web UI (Nginx + SPA) -----------------------------------------------
-  webui:
-    build:
-      context: ./webui
-    container_name: homewatcher-webui
-    restart: unless-stopped
-    network_mode: service:vpn
-    depends_on:
-      vpn:
-        condition: service_healthy
+      iptv_restream_frontend:
+        condition: service_started
+      iptv_restream_backend:
+        condition: service_started
+    volumes:
+      - ./deployment/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - streams_data:/streams
     ports:
       - "${UI_PORT:-1966}:80"
 
@@ -79,4 +93,15 @@ services:
     environment:
       - WATCHTOWER_CLEANUP=${WATCHTOWER_CLEANUP:-true}
       - WATCHTOWER_SCHEDULE=0 0 4 * * *
-      - WATCHTOWER_LABEL_ENABLE=false
+
+volumes:
+  streams_data:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+  channels:
+
+networks:
+  app-network:
+    driver: bridge
