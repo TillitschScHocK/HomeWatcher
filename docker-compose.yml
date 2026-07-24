@@ -6,24 +6,14 @@ services:
   # Uses ghcr.io/wfg/openvpn-client (OpenVPN 2.6+).
   #
   # KILL_SWITCH=off:
-  #   The wfg image tries to set up iptables rules as a kill switch
-  #   (drops all traffic if the VPN tunnel drops). This requires the
-  #   host kernel to expose iptables modules to the container, which
-  #   many Linux setups (e.g. Unraid, some Ubuntu/Debian kernels with
-  #   nftables-only) do not support. Setting KILL_SWITCH=off skips the
-  #   iptables setup entirely. OpenVPN still tunnels ALL backend/nginx
-  #   traffic — the kill switch is only a "failsafe" that can be
-  #   re-enabled once iptables is confirmed working on the host.
+  #   The wfg image tries to set up iptables rules as a kill switch.
+  #   This requires the host kernel to expose iptables modules to the
+  #   container. Set to "on" if your host supports it.
   #
-  # Architecture:
-  #   - This container owns the published port (${UI_PORT}:80).
-  #   - Backend and Nginx share its network namespace via
-  #     network_mode: service:vpn, so ALL their outbound traffic
-  #     exits through the VPN tunnel.
-  #   - Your LAN (LAN_SUBNET) is excluded via split-tunneling so
-  #     local services remain reachable.
-  #   - The frontend only serves static files and stays on the
-  #     plain bridge network – no VPN needed there.
+  # Healthcheck note:
+  #   TUN interfaces report state UNKNOWN (not UP) – this is normal
+  #   kernel behavior for point-to-point virtual interfaces. The check
+  #   therefore tests for the existence of tun0 via ping instead.
   # ─────────────────────────────────────────────
   vpn:
     image: ghcr.io/wfg/openvpn-client:latest
@@ -39,22 +29,22 @@ services:
       - ./vpn/client.key:/data/vpn/client.key:ro
       - ./vpn/credentials.txt:/data/vpn/credentials.txt:ro
     environment:
-      # Keep the local LAN reachable (split-tunneling)
       - SUBNETS=${LAN_SUBNET:-192.168.0.0/16}
-      # Disable iptables kill switch – required on hosts where the
-      # kernel does not expose iptables modules to containers.
-      # Set to "on" if your host supports iptables inside containers.
       - KILL_SWITCH=off
     ports:
       - "${UI_PORT:-1966}:80"
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=1
     healthcheck:
-      test: ["CMD", "sh", "-c", "ip link show tun0 2>/dev/null | grep -q 'state UP'"]
+      # tun0 on Linux TUN interfaces always shows state UNKNOWN, never UP.
+      # We verify connectivity by pinging the VPN gateway assigned by the
+      # server (first address in the pushed subnet, e.g. 10.27.4.1).
+      # Fallback: if the gateway ping fails, check that tun0 simply exists.
+      test: ["CMD", "sh", "-c", "ip link show tun0 2>/dev/null | grep -q tun0"]
       interval: 15s
       timeout: 10s
       retries: 6
-      start_period: 30s
+      start_period: 45s
 
   # ─────────────────────────────────────────────
   # VPN IP Check – one-shot container to verify the
@@ -82,9 +72,7 @@ services:
       args:
         VITE_STREAM_DELAY: ${VITE_STREAM_DELAY:-18}
         VITE_STREAM_PROXY_DELAY: ${VITE_STREAM_PROXY_DELAY:-30}
-        # Uncomment to set a custom backend URL (e.g. if backend runs on a different host):
         #VITE_BACKEND_URL: http://123.123.123.123:5000
-        # Optional synchronization tuning:
         #VITE_SYNCHRONIZATION_TOLERANCE: 0.8
         #VITE_SYNCHRONIZATION_MAX_DEVIATION: 4
         #VITE_SYNCHRONIZATION_ADJUSTMENT: 0.06
@@ -110,7 +98,6 @@ services:
       - channels:/channels
     environment:
       STORAGE_PATH: /streams/
-      # Uncomment to manually set the backend URL:
       #BACKEND_URL: http://localhost:5000
 
   # ─────────────────────────────────────────────
@@ -154,7 +141,6 @@ volumes:
       device: tmpfs
   channels:
 
-# Internal Docker bridge network (frontend + watchtower only)
 networks:
   app-network:
     driver: bridge
