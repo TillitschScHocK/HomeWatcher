@@ -11,11 +11,9 @@ ARG VITE_SYNCHRONIZATION_MAX_DEVIATION
 ARG VITE_SYNCHRONIZATION_ADJUSTMENT
 ARG VITE_SYNCHRONIZATION_MAX_ADJUSTMENT
 
-# Install dependencies
 COPY package.json package-lock.json ./
 RUN npm install
 
-# Copy source code and build
 COPY . .
 
 ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
@@ -28,10 +26,14 @@ ENV VITE_SYNCHRONIZATION_MAX_ADJUSTMENT=$VITE_SYNCHRONIZATION_MAX_ADJUSTMENT
 
 RUN npm run build
 
-# Serve the app using a minimal HTTP server
+# Serve the built app via nginx on port 3000.
+# All containers share the VPN network namespace, so frontend and
+# the reverse-proxy nginx would both default to port 80 and conflict.
+# Running frontend on port 3000 avoids that collision.
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx-frontend.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+EXPOSE 3000
 
 CMD ["nginx", "-g", "daemon off;"]
