@@ -3,37 +3,68 @@ services:
 
   # ─────────────────────────────────────────────
   # VPN – Base network container (CyberGhost / OpenVPN)
-  # All backend traffic is routed through this container.
-  # Port mapping lives here because containers using
-  # network_mode: service:vpn cannot publish ports themselves.
+  #
+  # Uses ghcr.io/wfg/openvpn-client (OpenVPN 2.6+) instead of the
+  # outdated dperson/openvpn-client (OpenVPN 2.4) which crashes on
+  # modern CyberGhost .ovpn configs that contain "data-ciphers".
+  #
+  # Architecture:
+  #   - This container owns the published port (${UI_PORT}:80).
+  #   - Backend and Nginx share its network namespace via
+  #     network_mode: service:vpn, so ALL their outbound traffic
+  #     exits through the VPN tunnel.
+  #   - Your LAN (LAN_SUBNET) is excluded via split-tunneling so
+  #     local services remain reachable.
+  #   - The frontend only serves static files and stays on the
+  #     plain bridge network – no VPN needed there.
   # ─────────────────────────────────────────────
   vpn:
-    image: dperson/openvpn-client:latest
+    image: ghcr.io/wfg/openvpn-client:latest
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
     devices:
       - /dev/net/tun
     volumes:
-      - ./vpn/openvpn.ovpn:/vpn/vpn.conf:ro
-      - ./vpn/ca.crt:/vpn/ca.crt:ro
-      - ./vpn/client.crt:/vpn/client.crt:ro
-      - ./vpn/client.key:/vpn/client.key:ro
-      - ./vpn/credentials.txt:/vpn/credentials.txt:ro
+      # The wfg image reads all files from /data/vpn/
+      - ./vpn/openvpn.ovpn:/data/vpn/vpn.conf:ro
+      - ./vpn/ca.crt:/data/vpn/ca.crt:ro
+      - ./vpn/client.crt:/data/vpn/client.crt:ro
+      - ./vpn/client.key:/data/vpn/client.key:ro
+      - ./vpn/credentials.txt:/data/vpn/credentials.txt:ro
     environment:
-      - FIREWALL=0
-      - ROUTE=${LAN_SUBNET:-192.168.0.0/16}
+      # Keep the local LAN reachable (split-tunneling)
+      - SUBNETS=${LAN_SUBNET:-192.168.0.0/16}
+      # Credentials file path inside the container
+      - AUTH_SECRET=/data/vpn/credentials.txt
     ports:
       - "${UI_PORT:-1966}:80"
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
+    sysctls:
+      # Suppress noisy IPv6 iptables warnings on hosts without IPv6 modules
+      - net.ipv6.conf.all.disable_ipv6=1
     healthcheck:
-      test: ["CMD", "sh", "-c", "ip link show tun0 | grep -q 'state UP'"]
+      # Verify that the tun0 tunnel interface is up before dependants start
+      test: ["CMD", "sh", "-c", "ip link show tun0 2>/dev/null | grep -q 'state UP'"]
       interval: 15s
       timeout: 10s
-      retries: 5
-      start_period: 20s
+      retries: 6
+      start_period: 30s
+
+  # ─────────────────────────────────────────────
+  # VPN IP Check – one-shot container to verify the
+  # backend actually exits through the VPN tunnel.
+  # Run manually:  docker compose run --rm vpn-check
+  # ─────────────────────────────────────────────
+  vpn-check:
+    image: alpine:latest
+    network_mode: "service:vpn"
+    depends_on:
+      vpn:
+        condition: service_healthy
+    command: ["sh", "-c", "apk add --no-cache curl -q && echo '--- VPN IP Check ---' && curl -s https://api.ipify.org && echo '' && curl -s https://ipapi.co/json/ | grep -E '\"ip\"|\"country_name\"|\"org\"' && echo '--- Done ---'"]
+    restart: "no"
+    profiles:
+      - tools
 
   # ─────────────────────────────────────────────
   # Frontend – Static UI files only, no VPN needed
@@ -77,7 +108,7 @@ services:
       #BACKEND_URL: http://localhost:5000
 
   # ─────────────────────────────────────────────
-  # Nginx – Reverse proxy, also routed through VPN
+  # Nginx – Reverse proxy, also routed through VPN.
   # Port is published via the vpn container above.
   # ─────────────────────────────────────────────
   iptv_restream_nginx:
