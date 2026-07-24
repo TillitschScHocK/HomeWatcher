@@ -1,12 +1,19 @@
-version: "3.9"
 services:
 
   # ─────────────────────────────────────────────
   # VPN – Base network container (CyberGhost / OpenVPN)
   #
-  # Uses ghcr.io/wfg/openvpn-client (OpenVPN 2.6+) instead of the
-  # outdated dperson/openvpn-client (OpenVPN 2.4) which crashes on
-  # modern CyberGhost .ovpn configs that contain "data-ciphers".
+  # Uses ghcr.io/wfg/openvpn-client (OpenVPN 2.6+).
+  #
+  # KILL_SWITCH=off:
+  #   The wfg image tries to set up iptables rules as a kill switch
+  #   (drops all traffic if the VPN tunnel drops). This requires the
+  #   host kernel to expose iptables modules to the container, which
+  #   many Linux setups (e.g. Unraid, some Ubuntu/Debian kernels with
+  #   nftables-only) do not support. Setting KILL_SWITCH=off skips the
+  #   iptables setup entirely. OpenVPN still tunnels ALL backend/nginx
+  #   traffic — the kill switch is only a "failsafe" that can be
+  #   re-enabled once iptables is confirmed working on the host.
   #
   # Architecture:
   #   - This container owns the published port (${UI_PORT}:80).
@@ -26,7 +33,6 @@ services:
     devices:
       - /dev/net/tun
     volumes:
-      # The wfg image reads all files from /data/vpn/
       - ./vpn/openvpn.ovpn:/data/vpn/vpn.conf:ro
       - ./vpn/ca.crt:/data/vpn/ca.crt:ro
       - ./vpn/client.crt:/data/vpn/client.crt:ro
@@ -35,15 +41,15 @@ services:
     environment:
       # Keep the local LAN reachable (split-tunneling)
       - SUBNETS=${LAN_SUBNET:-192.168.0.0/16}
-      # Credentials file path inside the container
-      - AUTH_SECRET=/data/vpn/credentials.txt
+      # Disable iptables kill switch – required on hosts where the
+      # kernel does not expose iptables modules to containers.
+      # Set to "on" if your host supports iptables inside containers.
+      - KILL_SWITCH=off
     ports:
       - "${UI_PORT:-1966}:80"
     sysctls:
-      # Suppress noisy IPv6 iptables warnings on hosts without IPv6 modules
       - net.ipv6.conf.all.disable_ipv6=1
     healthcheck:
-      # Verify that the tun0 tunnel interface is up before dependants start
       test: ["CMD", "sh", "-c", "ip link show tun0 2>/dev/null | grep -q 'state UP'"]
       interval: 15s
       timeout: 10s
