@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────
+# VPN Certificates & Credentials (NEVER commit these)
+# ─────────────────────────────────────────────
+vpn/ca.crt
+vpn/client.crt
+vpn/client.key
+vpn/openvpn.ovpn
+vpn/credentials.txt
+
+# ─────────────────────────────────────────────
+# Environment Configuration
+# ─────────────────────────────────────────────
+.env
+
+# ─────────────────────────────────────────────
+# Node.js / Build Artifacts
+# ─────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+backend/node_modules/
+
+# ─────────────────────────────────────────────
+# OS & Editor Artifacts
+# ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/

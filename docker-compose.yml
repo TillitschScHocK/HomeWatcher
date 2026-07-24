@@ -1,46 +1,111 @@
 version: "3.9"
 services:
+
+  # ─────────────────────────────────────────────
+  # VPN – Base network container (CyberGhost / OpenVPN)
+  # All backend traffic is routed through this container.
+  # Port mapping lives here because containers using
+  # network_mode: service:vpn cannot publish ports themselves.
+  # ─────────────────────────────────────────────
+  vpn:
+    image: dperson/openvpn-client:latest
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      - ./vpn/openvpn.ovpn:/vpn/vpn.conf:ro
+      - ./vpn/ca.crt:/vpn/ca.crt:ro
+      - ./vpn/client.crt:/vpn/client.crt:ro
+      - ./vpn/client.key:/vpn/client.key:ro
+      - ./vpn/credentials.txt:/vpn/credentials.txt:ro
+    environment:
+      - FIREWALL=0
+      - ROUTE=${LAN_SUBNET:-192.168.0.0/16}
+    ports:
+      - "${UI_PORT:-1966}:80"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    healthcheck:
+      test: ["CMD", "sh", "-c", "ip link show tun0 | grep -q 'state UP'"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # ─────────────────────────────────────────────
+  # Frontend – Static UI files only, no VPN needed
+  # ─────────────────────────────────────────────
   iptv_restream_frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Set this to the server ip/domain, if your backend is deployed on a different server
+        VITE_STREAM_DELAY: ${VITE_STREAM_DELAY:-18}
+        VITE_STREAM_PROXY_DELAY: ${VITE_STREAM_PROXY_DELAY:-30}
+        # Uncomment to set a custom backend URL (e.g. if backend runs on a different host):
         #VITE_BACKEND_URL: http://123.123.123.123:5000
-        VITE_STREAM_DELAY: 18
-        VITE_STREAM_PROXY_DELAY: 30
-        # Optional settings for synchronization
+        # Optional synchronization tuning:
         #VITE_SYNCHRONIZATION_TOLERANCE: 0.8
         #VITE_SYNCHRONIZATION_MAX_DEVIATION: 4
         #VITE_SYNCHRONIZATION_ADJUSTMENT: 0.06
         #VITE_SYNCHRONIZATION_MAX_ADJUSTMENT: 0.16
-
+    restart: unless-stopped
     networks:
       - app-network
 
+  # ─────────────────────────────────────────────
+  # Backend – Routed through VPN tunnel
+  # ─────────────────────────────────────────────
   iptv_restream_backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    network_mode: "service:vpn"
+    depends_on:
+      vpn:
+        condition: service_healthy
     volumes:
       - streams_data:/streams
       - channels:/channels
     environment:
       STORAGE_PATH: /streams/
-      # If you have problems with the playlist, set the backend url manually here
+      # Uncomment to manually set the backend URL:
       #BACKEND_URL: http://localhost:5000
-    networks:
-      - app-network
 
-  # Nginx Reverse Proxy
+  # ─────────────────────────────────────────────
+  # Nginx – Reverse proxy, also routed through VPN
+  # Port is published via the vpn container above.
+  # ─────────────────────────────────────────────
   iptv_restream_nginx:
     image: nginx:alpine
+    restart: unless-stopped
+    network_mode: "service:vpn"
+    depends_on:
+      vpn:
+        condition: service_healthy
+      iptv_restream_frontend:
+        condition: service_started
+      iptv_restream_backend:
+        condition: service_started
     volumes:
       - ./deployment/nginx/nginx.conf:/etc/nginx/nginx.conf
       - streams_data:/streams
-    ports:
-      - "1966:80"
+
+  # ─────────────────────────────────────────────
+  # Watchtower – Automatic container image updates
+  # ─────────────────────────────────────────────
+  watchtower:
+    image: containrrr/watchtower:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=${WATCHTOWER_CLEANUP:-true}
+      - WATCHTOWER_SCHEDULE=0 0 4 * * *
     networks:
       - app-network
 
@@ -52,7 +117,7 @@ volumes:
       device: tmpfs
   channels:
 
-# Internal docker network
+# Internal Docker bridge network (frontend + watchtower only)
 networks:
   app-network:
     driver: bridge
