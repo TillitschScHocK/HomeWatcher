@@ -33,7 +33,6 @@ services:
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=1
     healthcheck:
-      # TUN interfaces always report state UNKNOWN on Linux, never UP.
       test: ["CMD", "sh", "-c", "ip link show tun0 2>/dev/null | grep -q tun0"]
       interval: 15s
       timeout: 10s
@@ -81,13 +80,13 @@ services:
       #BACKEND_URL: http://localhost:5000
 
   # ─────────────────────────────────────────────────────────────────
-  # Nginx – Reverse proxy on port 80, routed through VPN.
-  # Port is published via the vpn container above.
-  # The default nginx conf is removed in the image to avoid a
-  # duplicate server-block conflict on port 80.
+  # Nginx – Reverse proxy on port 80, built from custom Dockerfile
+  # that removes default.conf to prevent duplicate listen 80 conflict.
   # ─────────────────────────────────────────────────────────────────
   iptv_restream_nginx:
-    image: nginx:alpine
+    build:
+      context: ./deployment/nginx
+      dockerfile: Dockerfile
     restart: unless-stopped
     network_mode: "service:vpn"
     depends_on:
