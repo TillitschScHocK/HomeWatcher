@@ -3,9 +3,15 @@ services:
   # ─────────────────────────────────────────────────────────────────
   # VPN – Base network container (CyberGhost / OpenVPN)
   #
-  # Owns the published port ${UI_PORT}:80.
-  # nginx and backend share this network namespace via
-  # network_mode: service:vpn so all traffic exits the VPN tunnel.
+  # Problem: Docker's port-mapping (ports: 1966:80) only works for
+  # the container that declares `ports:`. nginx runs in the shared
+  # network namespace (network_mode: service:vpn) and listens on :80
+  # there, but the VPN container itself has nothing on :80, so Docker
+  # refuses incoming connections.
+  #
+  # Fix: vpn/entrypoint.sh installs socat and runs it as a background
+  # forwarder: VPN-container :8080 -> 127.0.0.1:80 (nginx in the
+  # shared namespace). We publish 1966:8080 instead of 1966:80.
   # ─────────────────────────────────────────────────────────────────
   vpn:
     image: ghcr.io/wfg/openvpn-client:latest
@@ -20,11 +26,13 @@ services:
       - ./vpn/client.crt:/data/vpn/client.crt:ro
       - ./vpn/client.key:/data/vpn/client.key:ro
       - ./vpn/credentials.txt:/data/vpn/credentials.txt:ro
+      - ./vpn/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     environment:
       - SUBNETS=${LAN_SUBNET:-192.168.0.0/16}
       - KILL_SWITCH=off
     ports:
-      - "${UI_PORT:-1966}:80"
+      - "${UI_PORT:-1966}:8080"
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=1
     healthcheck:
@@ -53,9 +61,9 @@ services:
       STORAGE_PATH: /streams/
 
   # ─────────────────────────────────────────────────────────────────
-  # Nginx – single container: serves static frontend AND proxies backend
-  # Built from deployment/nginx/Dockerfile which includes the frontend
-  # build stage. No separate frontend container needed.
+  # Nginx – single container serving static files + API proxy
+  # Listens on port 80 inside the shared VPN namespace.
+  # Reachable from outside via socat forwarder in the VPN container.
   # ─────────────────────────────────────────────────────────────────
   iptv_restream_nginx:
     build:
