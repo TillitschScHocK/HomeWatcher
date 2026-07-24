@@ -1,17 +1,17 @@
 services:
 
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────
   # VPN – Base network container (CyberGhost / OpenVPN)
   #
-  # Owns the published port ${UI_PORT}:80. Backend, frontend, and nginx
-  # all share this network namespace via network_mode: service:vpn, so
-  # all outbound traffic from those containers exits through the tunnel.
+  # Owns the published port ${UI_PORT}:80.
+  # All other app containers share this network namespace via
+  # network_mode: service:vpn so their traffic exits the VPN tunnel.
   #
   # Port layout inside the shared namespace:
-  #   :80   reverse-proxy nginx (this is what the browser hits)
-  #   :3000 frontend nginx (static files)
+  #   :80   reverse-proxy nginx  ← browser connects here
+  #   :3000 frontend nginx       (static files)
   #   :5000 backend Node.js
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────
   vpn:
     image: ghcr.io/wfg/openvpn-client:latest
     restart: unless-stopped
@@ -40,10 +40,9 @@ services:
       retries: 6
       start_period: 45s
 
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────
   # Frontend – Vite/React build served by nginx on port 3000
-  # (port 80 is taken by the reverse-proxy nginx container)
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────
   iptv_restream_frontend:
     build:
       context: ./frontend
@@ -62,9 +61,9 @@ services:
       vpn:
         condition: service_healthy
 
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────
   # Backend – Routed through VPN tunnel
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────
   iptv_restream_backend:
     build:
       context: ./backend
@@ -81,10 +80,12 @@ services:
       STORAGE_PATH: /streams/
       #BACKEND_URL: http://localhost:5000
 
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────
   # Nginx – Reverse proxy on port 80, routed through VPN.
   # Port is published via the vpn container above.
-  # ─────────────────────────────────────────────
+  # The default nginx conf is removed in the image to avoid a
+  # duplicate server-block conflict on port 80.
+  # ─────────────────────────────────────────────────────────────────
   iptv_restream_nginx:
     image: nginx:alpine
     restart: unless-stopped
@@ -97,42 +98,25 @@ services:
       iptv_restream_backend:
         condition: service_started
     volumes:
-      - ./deployment/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./deployment/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - streams_data:/streams
 
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────
   # VPN IP Check – one-shot helper (profile: tools)
-  # Run:  docker compose run --rm vpn-check
-  # ─────────────────────────────────────────────
+  # Run:  docker compose --profile tools run --rm vpn-check
+  # ─────────────────────────────────────────────────────────────────
   vpn-check:
     image: alpine:latest
     network_mode: "service:vpn"
     depends_on:
       vpn:
         condition: service_healthy
-    # Use a shell script file instead of inline command to avoid
-    # Docker Compose interpolating $VARIABLE as Compose variables.
     volumes:
       - ./vpn/check.sh:/check.sh:ro
     entrypoint: ["/bin/sh", "/check.sh"]
     restart: "no"
     profiles:
       - tools
-
-  # ─────────────────────────────────────────────
-  # Watchtower – Automatic container image updates
-  # Runs on the bridge network (needs Docker socket, not VPN).
-  # ─────────────────────────────────────────────
-  watchtower:
-    image: containrrr/watchtower:latest
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - WATCHTOWER_CLEANUP=${WATCHTOWER_CLEANUP:-true}
-      - WATCHTOWER_SCHEDULE=0 0 4 * * *
-    networks:
-      - app-network
 
 volumes:
   streams_data:
@@ -141,7 +125,3 @@ volumes:
       type: tmpfs
       device: tmpfs
   channels:
-
-networks:
-  app-network:
-    driver: bridge
