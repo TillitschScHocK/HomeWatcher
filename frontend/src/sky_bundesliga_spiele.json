@@ -1,0 +1,65 @@
+[
+  {
+    "datum": "Freitag, 3. Oktober",
+    "kickoff": "20:30",
+    "heim": "TSG Hoffenheim",
+    "auswaerts": "1. FC Köln",
+    "senderinfo": "ab 20:15 Uhr live auf Sky Sport Top Event UHD"
+  },
+  {
+    "datum": "Samstag, 4. Oktober",
+    "kickoff": "15:30",
+    "heim": "Borussia Dortmund",
+    "auswaerts": "RB Leipzig",
+    "senderinfo": "ab 15:15 Uhr live auf Sky Bundesliga 1"
+  },
+  {
+    "datum": "Samstag, 4. Oktober",
+    "kickoff": "15:30",
+    "heim": "Werder Bremen",
+    "auswaerts": "FC St. Pauli",
+    "senderinfo": "ab 15:15 Uhr live auf Sky Bundesliga 2"
+  },
+  {
+    "datum": "Samstag, 4. Oktober",
+    "kickoff": "15:30",
+    "heim": "Bayer 04 Leverkusen",
+    "auswaerts": "1. FC Union Berlin",
+    "senderinfo": "ab 15:15 Uhr live auf Sky Bundesliga 3"
+  },
+  {
+    "datum": "Samstag, 4. Oktober",
+    "kickoff": "15:30",
+    "heim": "FC Augsburg",
+    "auswaerts": "VfL Wolfsburg",
+    "senderinfo": "ab 15:15 Uhr live auf Sky Bundesliga 4"
+  },
+  {
+    "datum": "Samstag, 4. Oktober",
+    "kickoff": "18:30",
+    "heim": "Eintracht Frankfurt",
+    "auswaerts": "FC Bayern München",
+    "senderinfo": "tipico Topspiel ab 17:30 Uhr live auf Sky Sport Top Event"
+  },
+  {
+    "datum": "Sonntag, 6. Oktober",
+    "kickoff": "15:30",
+    "heim": "VfB Stuttgart",
+    "auswaerts": "1. FC Heidenheim",
+    "senderinfo": "ab 17:30 Uhr Re-live auf Sky Bundesliga 2"
+  },
+  {
+    "datum": "Sonntag, 6. Oktober",
+    "kickoff": "17:30",
+    "heim": "Hamburger SV",
+    "auswaerts": "1. FSV Mainz 05",
+    "senderinfo": "ab 19:30 Uhr Re-live auf Sky Bundesliga 2"
+  },
+  {
+    "datum": "Sonntag, 6. Oktober",
+    "kickoff": "19:30",
+    "heim": "Borussia Mönchengladbach",
+    "auswaerts": "SC Freiburg",
+    "senderinfo": "ab 21:30 Uhr Re-live auf Sky Bundesliga 2"
+  }
+]
