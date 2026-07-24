@@ -1,4 +1,6 @@
-# Frontend Dockerfile
+# Frontend – build only, no runtime nginx.
+# The compiled /app/dist is copied into the nginx reverse-proxy image
+# via a multi-stage build in deployment/nginx/Dockerfile.
 FROM node:20 AS builder
 
 WORKDIR /app
@@ -26,14 +28,6 @@ ENV VITE_SYNCHRONIZATION_MAX_ADJUSTMENT=$VITE_SYNCHRONIZATION_MAX_ADJUSTMENT
 
 RUN npm run build
 
-# Serve the built app via nginx on port 3000.
-# All containers share the VPN network namespace, so frontend and
-# the reverse-proxy nginx would both default to port 80 and conflict.
-# Running frontend on port 3000 avoids that collision.
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx-frontend.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 3000
-
-CMD ["nginx", "-g", "daemon off;"]
+# Export stage so deployment/nginx/Dockerfile can COPY --from=frontend-builder
+FROM scratch
+COPY --from=builder /app/dist /dist

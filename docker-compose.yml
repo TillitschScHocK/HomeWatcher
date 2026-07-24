@@ -4,13 +4,8 @@ services:
   # VPN – Base network container (CyberGhost / OpenVPN)
   #
   # Owns the published port ${UI_PORT}:80.
-  # All other app containers share this network namespace via
-  # network_mode: service:vpn so their traffic exits the VPN tunnel.
-  #
-  # Port layout inside the shared namespace:
-  #   :80   reverse-proxy nginx  ← browser connects here
-  #   :3000 frontend nginx       (static files)
-  #   :5000 backend Node.js
+  # nginx and backend share this network namespace via
+  # network_mode: service:vpn so all traffic exits the VPN tunnel.
   # ─────────────────────────────────────────────────────────────────
   vpn:
     image: ghcr.io/wfg/openvpn-client:latest
@@ -40,28 +35,7 @@ services:
       start_period: 45s
 
   # ─────────────────────────────────────────────────────────────────
-  # Frontend – Vite/React build served by nginx on port 3000
-  # ─────────────────────────────────────────────────────────────────
-  iptv_restream_frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_STREAM_DELAY: ${VITE_STREAM_DELAY:-18}
-        VITE_STREAM_PROXY_DELAY: ${VITE_STREAM_PROXY_DELAY:-30}
-        #VITE_BACKEND_URL: http://123.123.123.123:5000
-        #VITE_SYNCHRONIZATION_TOLERANCE: 0.8
-        #VITE_SYNCHRONIZATION_MAX_DEVIATION: 4
-        #VITE_SYNCHRONIZATION_ADJUSTMENT: 0.06
-        #VITE_SYNCHRONIZATION_MAX_ADJUSTMENT: 0.16
-    restart: unless-stopped
-    network_mode: "service:vpn"
-    depends_on:
-      vpn:
-        condition: service_healthy
-
-  # ─────────────────────────────────────────────────────────────────
-  # Backend – Routed through VPN tunnel
+  # Backend – Node.js on port 5000, routed through VPN
   # ─────────────────────────────────────────────────────────────────
   iptv_restream_backend:
     build:
@@ -77,23 +51,29 @@ services:
       - channels:/channels
     environment:
       STORAGE_PATH: /streams/
-      #BACKEND_URL: http://localhost:5000
 
   # ─────────────────────────────────────────────────────────────────
-  # Nginx – Reverse proxy on port 80, built from custom Dockerfile
-  # that removes default.conf to prevent duplicate listen 80 conflict.
+  # Nginx – single container: serves static frontend AND proxies backend
+  # Built from deployment/nginx/Dockerfile which includes the frontend
+  # build stage. No separate frontend container needed.
   # ─────────────────────────────────────────────────────────────────
   iptv_restream_nginx:
     build:
-      context: ./deployment/nginx
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: deployment/nginx/Dockerfile
+      args:
+        VITE_STREAM_DELAY: ${VITE_STREAM_DELAY:-18}
+        VITE_STREAM_PROXY_DELAY: ${VITE_STREAM_PROXY_DELAY:-30}
+        #VITE_BACKEND_URL: http://123.123.123.123:5000
+        #VITE_SYNCHRONIZATION_TOLERANCE: 0.8
+        #VITE_SYNCHRONIZATION_MAX_DEVIATION: 4
+        #VITE_SYNCHRONIZATION_ADJUSTMENT: 0.06
+        #VITE_SYNCHRONIZATION_MAX_ADJUSTMENT: 0.16
     restart: unless-stopped
     network_mode: "service:vpn"
     depends_on:
       vpn:
         condition: service_healthy
-      iptv_restream_frontend:
-        condition: service_started
       iptv_restream_backend:
         condition: service_started
     volumes:
