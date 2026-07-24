@@ -3,17 +3,15 @@ services:
   # ─────────────────────────────────────────────
   # VPN – Base network container (CyberGhost / OpenVPN)
   #
-  # Uses ghcr.io/wfg/openvpn-client (OpenVPN 2.6+).
+  # All containers that need to talk to each other (nginx, frontend,
+  # backend) share this network namespace via network_mode: service:vpn.
+  # This is required so nginx can resolve hostnames like
+  # "iptv_restream_frontend" – Docker's embedded DNS only works within
+  # a shared network namespace.
   #
-  # KILL_SWITCH=off:
-  #   The wfg image tries to set up iptables rules as a kill switch.
-  #   This requires the host kernel to expose iptables modules to the
-  #   container. Set to "on" if your host supports it.
-  #
-  # Healthcheck note:
-  #   TUN interfaces report state UNKNOWN (not UP) – this is normal
-  #   kernel behavior for point-to-point virtual interfaces. The check
-  #   therefore tests for the existence of tun0 via ping instead.
+  # KILL_SWITCH=off: the wfg image uses iptables for its kill switch,
+  # which requires the host kernel to expose iptables modules to the
+  # container. Disable if your host does not support this.
   # ─────────────────────────────────────────────
   vpn:
     image: ghcr.io/wfg/openvpn-client:latest
@@ -36,10 +34,8 @@ services:
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=1
     healthcheck:
-      # tun0 on Linux TUN interfaces always shows state UNKNOWN, never UP.
-      # We verify connectivity by pinging the VPN gateway assigned by the
-      # server (first address in the pushed subnet, e.g. 10.27.4.1).
-      # Fallback: if the gateway ping fails, check that tun0 simply exists.
+      # TUN interfaces always report state UNKNOWN on Linux, never UP.
+      # We simply check that the tun0 interface exists.
       test: ["CMD", "sh", "-c", "ip link show tun0 2>/dev/null | grep -q tun0"]
       interval: 15s
       timeout: 10s
@@ -47,23 +43,13 @@ services:
       start_period: 45s
 
   # ─────────────────────────────────────────────
-  # VPN IP Check – one-shot container to verify the
-  # backend actually exits through the VPN tunnel.
-  # Run manually:  docker compose run --rm vpn-check
-  # ─────────────────────────────────────────────
-  vpn-check:
-    image: alpine:latest
-    network_mode: "service:vpn"
-    depends_on:
-      vpn:
-        condition: service_healthy
-    command: ["sh", "-c", "apk add --no-cache curl -q && echo '--- VPN IP Check ---' && curl -s https://api.ipify.org && echo '' && curl -s https://ipapi.co/json/ | grep -E '\"ip\"|\"country_name\"|\"org\"' && echo '--- Done ---'"]
-    restart: "no"
-    profiles:
-      - tools
-
-  # ─────────────────────────────────────────────
-  # Frontend – Static UI files only, no VPN needed
+  # Frontend – Static UI (nginx:alpine serving /dist)
+  #
+  # Shares the VPN network namespace so that iptv_restream_nginx
+  # can proxy_pass to "iptv_restream_frontend" by hostname.
+  # Docker's embedded DNS resolves container names only within the
+  # same network namespace; since nginx runs in service:vpn, all
+  # upstream containers must do the same.
   # ─────────────────────────────────────────────
   iptv_restream_frontend:
     build:
@@ -78,8 +64,10 @@ services:
         #VITE_SYNCHRONIZATION_ADJUSTMENT: 0.06
         #VITE_SYNCHRONIZATION_MAX_ADJUSTMENT: 0.16
     restart: unless-stopped
-    networks:
-      - app-network
+    network_mode: "service:vpn"
+    depends_on:
+      vpn:
+        condition: service_healthy
 
   # ─────────────────────────────────────────────
   # Backend – Routed through VPN tunnel
@@ -101,7 +89,7 @@ services:
       #BACKEND_URL: http://localhost:5000
 
   # ─────────────────────────────────────────────
-  # Nginx – Reverse proxy, also routed through VPN.
+  # Nginx – Reverse proxy, routed through VPN.
   # Port is published via the vpn container above.
   # ─────────────────────────────────────────────
   iptv_restream_nginx:
@@ -120,6 +108,60 @@ services:
       - streams_data:/streams
 
   # ─────────────────────────────────────────────
+  # VPN IP Check – one-shot helper (profile: tools)
+  # Run:  docker compose run --rm vpn-check
+  # Shows your real IP vs. the VPN exit IP in color.
+  # ─────────────────────────────────────────────
+  vpn-check:
+    image: alpine:latest
+    network_mode: "service:vpn"
+    depends_on:
+      vpn:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache curl 2>/dev/null 1>/dev/null
+        GREEN='\033[0;32m'
+        RED='\033[0;31m'
+        YELLOW='\033[1;33m'
+        RESET='\033[0m'
+        BOLD='\033[1m'
+
+        echo ""
+        echo "${BOLD}=== VPN IP Check ===${RESET}"
+
+        # Fetch real host IP via --interface eth0 (bypasses tun0 route)
+        REAL_IP=$(curl -s --interface eth0 --max-time 5 https://api.ipify.org 2>/dev/null)
+        if [ -z "$REAL_IP" ]; then
+          REAL_IP="${YELLOW}could not determine${RESET}"
+        fi
+
+        # Fetch VPN exit IP via tun0
+        VPN_IP=$(curl -s --interface tun0 --max-time 5 https://api.ipify.org 2>/dev/null)
+        if [ -z "$VPN_IP" ]; then
+          VPN_IP="${YELLOW}could not determine${RESET}"
+        fi
+
+        echo "  Host IP  : ${BOLD}${REAL_IP}${RESET}"
+        echo "  VPN IP   : ${BOLD}${VPN_IP}${RESET}"
+        echo ""
+
+        if [ "$REAL_IP" = "$VPN_IP" ] || [ -z "$VPN_IP" ]; then
+          echo "  ${RED}FAIL – VPN does not appear to be routing traffic!${RESET}"
+        elif echo "$REAL_IP" | grep -qE '^[0-9]+'; then
+          if [ "$REAL_IP" != "$VPN_IP" ]; then
+            echo "  ${GREEN}OK – VPN is active. Traffic exits via a different IP.${RESET}"
+          fi
+        else
+          echo "  ${YELLOW}UNKNOWN – Could not compare IPs reliably.${RESET}"
+        fi
+        echo ""
+    restart: "no"
+    profiles:
+      - tools
+
+  # ─────────────────────────────────────────────
   # Watchtower – Automatic container image updates
   # ─────────────────────────────────────────────
   watchtower:
@@ -130,8 +172,10 @@ services:
     environment:
       - WATCHTOWER_CLEANUP=${WATCHTOWER_CLEANUP:-true}
       - WATCHTOWER_SCHEDULE=0 0 4 * * *
-    networks:
-      - app-network
+    network_mode: "service:vpn"
+    depends_on:
+      vpn:
+        condition: service_healthy
 
 volumes:
   streams_data:
@@ -140,7 +184,3 @@ volumes:
       type: tmpfs
       device: tmpfs
   channels:
-
-networks:
-  app-network:
-    driver: bridge
