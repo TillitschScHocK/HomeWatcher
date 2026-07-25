@@ -1,6 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Settings, Users, Radio, Tv2, ChevronDown } from 'lucide-react';
-import { ReactComponent as SpatenIcon } from './assets/spaten.svg';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Search, Plus, Tv2, ChevronDown, Tag } from 'lucide-react';
 import VideoPlayer from './components/VideoPlayer';
 import ChannelList from './components/ChannelList';
 import ChannelModal from './components/add_channel/ChannelModal';
@@ -12,346 +11,238 @@ import TvPlaylistModal from './components/TvPlaylistModal';
 import { ToastProvider } from './components/notifications/ToastContext';
 import ToastContainer from './components/notifications/ToastContainer';
 
-// Interface für die Spieldaten
-interface Spiel {
-  datum: string;
-  kickoff: string;
-  heim: string;
-  auswärts: string;
-  senderinfo: string;
-}
-
 function App() {
-  const [isOpen, setIsOpen] = useState(false);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTvPlaylistOpen, setIsTvPlaylistOpen] = useState(false);
   const [syncEnabled, setSyncEnabled] = useState(() => {
-    const savedValue = localStorage.getItem('syncEnabled');
-    return savedValue !== null ? JSON.parse(savedValue) : false;
+    const saved = localStorage.getItem('syncEnabled');
+    return saved !== null ? JSON.parse(saved) : false;
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [editChannel, setEditChannel] = useState<Channel | null>(null);
-
   const [selectedPlaylist, setSelectedPlaylist] = useState<string>('Alle Sender');
-  const [selectedGroup, setSelectedGroup] = useState<string>('Katergorie');
+  const [selectedGroup, setSelectedGroup] = useState<string>('Kategorie');
   const [isPlaylistDropdownOpen, setIsPlaylistDropdownOpen] = useState(false);
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
 
-  // State für die Spieldaten
-  const [spiele, setSpiele] = useState<Spiel[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const playlistRef = useRef<HTMLDivElement>(null);
+  const groupRef    = useRef<HTMLDivElement>(null);
 
-  // Spieldaten laden
+  // Close dropdowns on outside click
   useEffect(() => {
-    const loadSpiele = async () => {
-      try {
-        setLoading(true);
-        // Dynamischer Import der JSON-Datei
-        const spieleData = await import('./sky_bundesliga_spiele.json');
-        setSpiele(spieleData.default || spieleData);
-        setError(null);
-      } catch (err) {
-        console.error('Fehler beim Laden der Spieldaten:', err);
-        setError('Spieldaten konnten nicht geladen werden');
-        setSpiele([]);
-      } finally {
-        setLoading(false);
-      }
+    const handler = (e: MouseEvent) => {
+      if (playlistRef.current && !playlistRef.current.contains(e.target as Node)) setIsPlaylistDropdownOpen(false);
+      if (groupRef.current    && !groupRef.current.contains(e.target as Node))    setIsGroupDropdownOpen(false);
     };
-
-    loadSpiele();
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Get unique playlists from channels
   const playlists = useMemo(() => {
-    const uniquePlaylists = new Set(channels.map(channel => channel.playlistName).filter(playlistName => playlistName !== null));
-    return ['Alle Sender', ...Array.from(uniquePlaylists)];
+    const unique = new Set(channels.map(c => c.playlistName).filter(Boolean));
+    return ['Alle Sender', ...Array.from(unique)];
   }, [channels]);
 
   const filteredChannels = useMemo(() => {
-    //Filter by playlist
-    let filteredByPlaylist = selectedPlaylist === 'Alle Sender' ? channels : channels.filter(channel => 
-      channel.playlistName === selectedPlaylist
-    );
-
-    //Filter by group
-    filteredByPlaylist = selectedGroup === 'Katergorie' ? filteredByPlaylist : filteredByPlaylist.filter(channel => 
-      channel.group === selectedGroup
-    );
-
-    //Filter by name search
-    return filteredByPlaylist.filter(channel =>
-      channel.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    let list = selectedPlaylist === 'Alle Sender' ? channels : channels.filter(c => c.playlistName === selectedPlaylist);
+    list = selectedGroup === 'Kategorie' ? list : list.filter(c => c.group === selectedGroup);
+    return list.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [channels, selectedPlaylist, selectedGroup, searchQuery]);
 
   const groups = useMemo(() => {
-    let uniqueGroups;
-    if(selectedPlaylist === 'Alle Sender') {
-      uniqueGroups = new Set(channels.map(channel => channel.group).filter(group => group !== null));
-    } else {
-      uniqueGroups = new Set(channels.filter(channel => channel.group !== null && channel.playlistName === selectedPlaylist).map(channel => channel.group));
-    }
-    return ['Katergorie', ...Array.from(uniqueGroups)];
+    const base = selectedPlaylist === 'Alle Sender' ? channels : channels.filter(c => c.playlistName === selectedPlaylist);
+    const unique = new Set(base.map(c => c.group).filter(Boolean));
+    return ['Kategorie', ...Array.from(unique)];
   }, [selectedPlaylist, channels]);
 
   useEffect(() => {
-    apiService
-      .request<Channel[]>('/channels/', 'GET')
-      .then((data) => setChannels(data))
-      .catch((error) => console.error('Error loading channels:', error));
+    apiService.request<Channel[]>('/channels/', 'GET').then(setChannels).catch(console.error);
+    apiService.request<Channel>('/channels/current', 'GET').then(setSelectedChannel).catch(console.error);
 
-    apiService
-      .request<Channel>('/channels/current', 'GET')
-      .then((data) => setSelectedChannel(data))
-      .catch((error) => console.error('Error loading current channel:', error));
-
-    console.log('Subscribing to events');
-    const channelAddedListener = (channel: Channel) => {
-      setChannels((prevChannels) => [...prevChannels, channel]);
-    };
-
-    const channelSelectedListener = (nextChannel: Channel) => {
-      setSelectedChannel(nextChannel);
-    };
-
-    const channelUpdatedListener = (updatedChannel: Channel) => {
-      setChannels((prevChannels) =>
-        prevChannels.map((channel) =>
-          channel.id === updatedChannel.id ? updatedChannel : channel
-        )
-      );
-
-      setSelectedChannel((selectedChannel: Channel | null) => {
-          if(selectedChannel?.id === updatedChannel.id) {
-
-            // Reload stream if the stream attributes (url, headers) have changed
-            if((selectedChannel?.url != updatedChannel.url || JSON.stringify(selectedChannel?.headers) != JSON.stringify(updatedChannel.headers)) && selectedChannel?.mode === 'restream'){ 
-              //TODO: find a better solution instead of reloading (problem is m3u8 needs time to refresh server-side)
-              setTimeout(() => {
-                window.location.reload(); 
-              }, 3000);
-            }
-            return updatedChannel;
-          }
-          return selectedChannel;
+    const onAdded   = (ch: Channel) => setChannels(prev => [...prev, ch]);
+    const onSelected = (ch: Channel) => setSelectedChannel(ch);
+    const onUpdated  = (ch: Channel) => {
+      setChannels(prev => prev.map(c => c.id === ch.id ? ch : c));
+      setSelectedChannel(prev => {
+        if (prev?.id !== ch.id) return prev;
+        if ((prev.url !== ch.url || JSON.stringify(prev.headers) !== JSON.stringify(ch.headers)) && prev.mode === 'restream') {
+          setTimeout(() => window.location.reload(), 3000);
         }
-      ); 
-
+        return ch;
+      });
     };
+    const onDeleted = (id: number) => setChannels(prev => prev.filter(c => c.id !== id));
 
-    const channelDeletedListener = (deletedChannel: number) => {
-      setChannels((prevChannels) =>
-        prevChannels.filter((channel) => channel.id !== deletedChannel)
-      );
-    };
-
-    socketService.subscribeToEvent('channel-added', channelAddedListener);
-    socketService.subscribeToEvent('channel-selected', channelSelectedListener);
-    socketService.subscribeToEvent('channel-updated', channelUpdatedListener);
-    socketService.subscribeToEvent('channel-deleted', channelDeletedListener);
-
+    socketService.subscribeToEvent('channel-added',   onAdded);
+    socketService.subscribeToEvent('channel-selected', onSelected);
+    socketService.subscribeToEvent('channel-updated', onUpdated);
+    socketService.subscribeToEvent('channel-deleted', onDeleted);
     socketService.connect();
 
     return () => {
-      socketService.unsubscribeFromEvent('channel-added', channelAddedListener);
-      socketService.unsubscribeFromEvent('channel-selected', channelSelectedListener);
-      socketService.unsubscribeFromEvent('channel-updated', channelUpdatedListener);
-      socketService.unsubscribeFromEvent('channel-deleted', channelDeletedListener);
+      socketService.unsubscribeFromEvent('channel-added',   onAdded);
+      socketService.unsubscribeFromEvent('channel-selected', onSelected);
+      socketService.unsubscribeFromEvent('channel-updated', onUpdated);
+      socketService.unsubscribeFromEvent('channel-deleted', onDeleted);
       socketService.disconnect();
-      console.log('WebSocket connection closed');
     };
   }, []);
 
-  const handleEditChannel = (channel: Channel) => {
-    setEditChannel(channel);
-    setIsModalOpen(true);
-  };
+  const handleEditChannel = (ch: Channel) => { setEditChannel(ch); setIsModalOpen(true); };
 
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-gray-900 text-gray-100">
-        <div className="container mx-auto py-4">
-          <header className="flex items-center justify-between mb-6 px-2 sm:px-4">
-            {/* Logo - links */}
-            <div className="flex items-center space-x-3 flex-shrink-0 transition-transform duration-300 hover:scale-105">
-              <img
-                src={new URL('./assets/spaten.svg', import.meta.url).href}
-                alt="Spaten"
-                className="w-8 h-8"
+      <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
+
+        {/* ── Header ────────────────────────────────────────────────── */}
+        <header className="hw-header">
+          <div className="container mx-auto px-4 py-3 flex items-center gap-4">
+
+            {/* Logo */}
+            <a href="/" className="flex items-center gap-2.5 flex-shrink-0 hover-lift" aria-label="HomeWatcher">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'var(--brand-red)' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round"/>
+                  <path d="M9 21V12h6v9" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <span className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>HomeWatcher</span>
+            </a>
+
+            {/* Search */}
+            <div className="flex-1 mx-2 max-w-xl relative">
+              <Search
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                style={{ color: 'var(--text-faint)' }}
               />
-              <h1 className="text-2xl font-bold text-white">Spaten</h1>
+              <input
+                type="text"
+                placeholder="Kanäle suchen…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="hw-search w-full pl-10 pr-4 py-2.5 text-sm"
+              />
             </div>
 
-            {/* Suchleiste - mittig, flexibel */}
-            <div className="flex-1 ml-4 sm:px-4 lg:px-8 max-w-full sm:max-w-4xl mx-auto transition-all duration-300 ease-in-out">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Suche Kanäle..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-gray-800/60 backdrop-blur-lg rounded-2xl pl-12 pr-6 py-3 
-                            focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-gray-800/80 
-                            border border-gray-600/50 transition-all duration-300 ease-in-out 
-                            placeholder-gray-300 text-white shadow-xl"
-                />
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-300 transition-colors duration-300" />
-              </div>
-            </div>
-
-            {/* Platzhalter - nur sichtbar ab sm */}
-            <div className="hidden sm:block w-32 flex-shrink-0"></div>
-          </header>
-          <div className="grid grid-cols-12 gap-6">
-            <div className="col-span-12 lg:col-span-12 space-y-4">
-              <div className="bg-gray-800 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="relative">
-                      <button
-                        onClick={() => {
-                          setIsPlaylistDropdownOpen(!isPlaylistDropdownOpen);
-                          setIsGroupDropdownOpen(false);
-                        }}
-                        className="flex items-center space-x-2 group"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <Tv2 className="w-5 h-5 text-blue-500" />
-                          <h2 className="text-xl font-semibold group-hover:text-blue-400 transition-colors">
-                            {selectedPlaylist}
-                          </h2>
-                        </div>
-                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isPlaylistDropdownOpen ? 'rotate-180' : ''}`} />
-                      </button>
-
-                      {isPlaylistDropdownOpen && (
-                        <div className="absolute top-full left-0 mt-1 w-48 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-50 overflow-hidden">
-                          <div className="max-h-72 overflow-y-auto scroll-container">
-                            {playlists.map((playlist) => (
-                              <button
-                                key={playlist}
-                                onClick={() => {
-                                  setSelectedPlaylist(playlist);
-                                  setSelectedGroup('Katergorie');
-                                  setIsPlaylistDropdownOpen(false);
-                                }}
-                                className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-gray-700 ${
-                                  selectedPlaylist === playlist ? 'text-blue-400 text-base font-semibold' : 'text-gray-200'
-                                }`}
-                                style={{
-                                  whiteSpace: 'normal',
-                                  wordWrap: 'break-word', 
-                                  overflowWrap: 'anywhere', 
-                                }}
-                              >
-                                {playlist}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Group Dropdown */}
-                    <div className="relative">
-                      <button
-                        onClick={() => {
-                          setIsGroupDropdownOpen(!isGroupDropdownOpen);
-                          setIsPlaylistDropdownOpen(false);
-                        }}
-                        className="flex items-center space-x-2 group py-0.5 px-1.5 rounded-lg transition-all bg-white bg-opacity-10"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <h4 className="text-base text-gray-300 group-hover:text-blue-400 transition-colors">
-                            {selectedGroup}
-                          </h4>
-                        </div>
-                        <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${isGroupDropdownOpen ? 'rotate-180' : ''}`} />
-                      </button>
-
-                      {isGroupDropdownOpen && (
-                        <div className="absolute top-full left-0 mt-1 w-48 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-50 overflow-hidden">
-                          <div className="max-h-72 overflow-y-auto scroll-container">
-                            {groups.map((group) => (
-                              <button
-                                key={group}
-                                onClick={() => {
-                                  setSelectedGroup(group);
-                                  setIsGroupDropdownOpen(false);
-                                }}
-                                className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-gray-700 ${
-                                  selectedGroup === group ? 'text-blue-400 text-base font-semibold' : 'text-gray-200'
-                                }`}
-                                style={{
-                                  whiteSpace: 'normal',
-                                  wordWrap: 'break-word', 
-                                  overflowWrap: 'anywhere', 
-                                }}
-                              >
-                                {group === 'Katergorie' ? 'All Categories' : group}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setIsModalOpen(true);
-                      setIsGroupDropdownOpen(false);
-                      setIsPlaylistDropdownOpen(false);
-                    }}
-                    className="p-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <ChannelList
-                  channels={filteredChannels}
-                  selectedChannel={selectedChannel}
-                  setSearchQuery={setSearchQuery}
-                  onEditChannel={handleEditChannel}
-                />
-              </div>
-
-              <VideoPlayer channel={selectedChannel} syncEnabled={syncEnabled} />
+            {/* Actions */}
+            <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+              <button
+                onClick={() => { setIsModalOpen(true); setIsGroupDropdownOpen(false); setIsPlaylistDropdownOpen(false); }}
+                className="btn-red"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Sender</span>
+              </button>
             </div>
           </div>
-        </div>
+        </header>
 
+        {/* ── Main ──────────────────────────────────────────────────── */}
+        <main className="container mx-auto px-4 py-6 space-y-5">
+
+          {/* Channel Panel */}
+          <section className="hw-card p-5">
+            {/* Panel Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+
+                {/* Playlist Dropdown */}
+                <div className="relative" ref={playlistRef}>
+                  <button
+                    onClick={() => { setIsPlaylistDropdownOpen(o => !o); setIsGroupDropdownOpen(false); }}
+                    className="btn-ghost text-sm font-semibold"
+                    style={isPlaylistDropdownOpen ? { color: 'var(--brand-red)', borderColor: 'var(--brand-red)' } : {}}
+                  >
+                    <Tv2 className="w-4 h-4" />
+                    <span>{selectedPlaylist}</span>
+                    <ChevronDown
+                      className="w-3.5 h-3.5 transition-transform duration-200"
+                      style={{ transform: isPlaylistDropdownOpen ? 'rotate(180deg)' : 'none' }}
+                    />
+                  </button>
+                  {isPlaylistDropdownOpen && (
+                    <div className="hw-dropdown absolute top-full left-0 mt-1.5 w-52 z-50">
+                      <div className="max-h-64 overflow-y-auto scroll-container py-1">
+                        {playlists.map(pl => (
+                          <button
+                            key={pl}
+                            onClick={() => { setSelectedPlaylist(pl); setSelectedGroup('Kategorie'); setIsPlaylistDropdownOpen(false); }}
+                            className={`hw-dropdown-item ${selectedPlaylist === pl ? 'is-active' : ''}`}
+                          >{pl}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Group Dropdown */}
+                <div className="relative" ref={groupRef}>
+                  <button
+                    onClick={() => { setIsGroupDropdownOpen(o => !o); setIsPlaylistDropdownOpen(false); }}
+                    className="btn-ghost text-sm"
+                    style={isGroupDropdownOpen ? { color: 'var(--brand-red)', borderColor: 'var(--brand-red)' } : {}}
+                  >
+                    <Tag className="w-3.5 h-3.5" />
+                    <span>{selectedGroup}</span>
+                    <ChevronDown
+                      className="w-3.5 h-3.5 transition-transform duration-200"
+                      style={{ transform: isGroupDropdownOpen ? 'rotate(180deg)' : 'none' }}
+                    />
+                  </button>
+                  {isGroupDropdownOpen && (
+                    <div className="hw-dropdown absolute top-full left-0 mt-1.5 w-52 z-50">
+                      <div className="max-h-64 overflow-y-auto scroll-container py-1">
+                        {groups.map(g => (
+                          <button
+                            key={g}
+                            onClick={() => { setSelectedGroup(g); setIsGroupDropdownOpen(false); }}
+                            className={`hw-dropdown-item ${selectedGroup === g ? 'is-active' : ''}`}
+                          >{g === 'Kategorie' ? 'Alle Kategorien' : g}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Channel count badge */}
+              <span className="text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: 'var(--bg-surface-2)', color: 'var(--text-muted)' }}>
+                {filteredChannels.length} Sender
+              </span>
+            </div>
+
+            <ChannelList
+              channels={filteredChannels}
+              selectedChannel={selectedChannel}
+              setSearchQuery={setSearchQuery}
+              onEditChannel={handleEditChannel}
+            />
+          </section>
+
+          {/* Video Player */}
+          <VideoPlayer channel={selectedChannel} syncEnabled={syncEnabled} />
+        </main>
+
+        {/* ── Modals ────────────────────────────────────────────────── */}
         {isModalOpen && (
           <ChannelModal
-            onClose={() => {
-              setIsModalOpen(false);
-              setEditChannel(null);
-            }}
+            onClose={() => { setIsModalOpen(false); setEditChannel(null); }}
             channel={editChannel}
           />
         )}
-
         <SettingsModal
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
           syncEnabled={syncEnabled}
-          onSyncChange={(enabled) => {
-            setSyncEnabled(enabled);
-            localStorage.setItem('syncEnabled', JSON.stringify(enabled));
-          }}
+          onSyncChange={enabled => { setSyncEnabled(enabled); localStorage.setItem('syncEnabled', JSON.stringify(enabled)); }}
         />
-
-        <TvPlaylistModal
-          isOpen={isTvPlaylistOpen}
-          onClose={() => setIsTvPlaylistOpen(false)}
-        />
-
+        <TvPlaylistModal isOpen={isTvPlaylistOpen} onClose={() => setIsTvPlaylistOpen(false)} />
         <ToastContainer />
       </div>
     </ToastProvider>
