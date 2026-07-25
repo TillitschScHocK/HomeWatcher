@@ -1,58 +1,89 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, ShieldOff } from 'lucide-react';
+import { Server, AlertCircle } from 'lucide-react';
 import apiService from '../services/ApiService';
 
 interface VpnStatus {
-  active: boolean;
+  active: boolean | null;
   ip: string | null;
   org: string | null;
   country: string | null;
+  error?: string;
 }
 
 export default function VpnBadge() {
-  const [status, setStatus] = useState<VpnStatus | null>(null);
+  const [status, setStatus]       = useState<VpnStatus | null>(null);
+  const [fetchError, setFetchError] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
 
-  // Single fetch on mount – checks the server/container's outbound IP
+  // Single fetch on mount only
   useEffect(() => {
     apiService.request<VpnStatus>('/vpn-status', 'GET')
-      .then(setStatus)
-      .catch(() => setStatus({ active: false, ip: null, org: null, country: null }));
+      .then(data => {
+        if (data.error && !data.ip) {
+          setFetchError(true);
+        } else {
+          setStatus(data);
+        }
+      })
+      .catch(() => setFetchError(true));
   }, []);
 
-  // Still loading
-  if (!status) {
+  // Loading state
+  if (!status && !fetchError) {
     return (
-      <div className="vpn-badge vpn-checking" title="Checking server IP…">
+      <div className="vpn-badge vpn-checking" title="Server-IP wird ermittelt…">
         <span className="vpn-pulse" />
       </div>
     );
   }
 
+  // Error state
+  if (fetchError || !status?.ip) {
+    return (
+      <div
+        className="vpn-badge vpn-off"
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        role="status"
+        aria-label="IP-Abfrage fehlgeschlagen"
+      >
+        <AlertCircle className="w-3.5 h-3.5" />
+        <span className="vpn-label hidden sm:inline">Fehler</span>
+        {showTooltip && (
+          <div className="vpn-tooltip">
+            <span className="font-semibold">⚠️ IP-Abfrage fehlgeschlagen</span>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
+              Backend nicht erreichbar
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Determine badge color: only if active is explicitly boolean
+  const hasVpnCheck = status.active !== null;
+  const badgeClass  = hasVpnCheck
+    ? (status.active ? 'vpn-on' : 'vpn-off')
+    : 'vpn-on'; // neutral green when no env-var check configured
+
+  const label = `Server ${status.ip}`;
+
   return (
     <div
-      className={`vpn-badge ${status.active ? 'vpn-on' : 'vpn-off'}`}
+      className={`vpn-badge ${badgeClass}`}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
       role="status"
-      aria-label={status.active ? 'Server VPN active' : 'Server VPN not detected'}
+      aria-label={label}
     >
-      {status.active
-        ? <ShieldCheck className="w-3.5 h-3.5" />
-        : <ShieldOff   className="w-3.5 h-3.5" />}
-
-      <span className="vpn-label hidden sm:inline">
-        {status.active ? 'VPN' : 'No VPN'}
-      </span>
+      <Server className="w-3.5 h-3.5" />
+      <span className="vpn-label hidden sm:inline">{label}</span>
 
       {showTooltip && (
         <div className="vpn-tooltip">
-          <span className="font-semibold">
-            {status.active ? '🔒 Server VPN aktiv' : '⚠️ Kein VPN erkannt'}
-          </span>
-          {status.ip && (
-            <span className="vpn-tooltip-ip">{status.ip}</span>
-          )}
+          <span className="font-semibold">🖥️ Server-IP</span>
+          <span className="vpn-tooltip-ip">{status.ip}</span>
           {status.org && (
             <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
               {status.org}
@@ -61,8 +92,13 @@ export default function VpnBadge() {
           {status.country && (
             <span style={{ fontSize: '0.65rem', opacity: 0.6 }}>{status.country}</span>
           )}
+          {hasVpnCheck && (
+            <span style={{ fontSize: '0.63rem', opacity: 0.7, marginTop: '2px' }}>
+              {status.active ? '🔒 VPN aktiv' : '⚠️ Kein VPN erkannt'}
+            </span>
+          )}
           <span style={{ fontSize: '0.63rem', opacity: 0.5, marginTop: '2px' }}>
-            Server-IP · einmalig beim Laden
+            einmalig beim Laden
           </span>
         </div>
       )}
