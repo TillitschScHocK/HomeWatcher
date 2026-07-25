@@ -10,6 +10,7 @@ import SettingsModal from './components/SettingsModal';
 import TvPlaylistModal from './components/TvPlaylistModal';
 import { ToastProvider } from './components/notifications/ToastContext';
 import ToastContainer from './components/notifications/ToastContainer';
+import VpnBadge from './components/VpnBadge';
 import spatenLogo from './assets/spaten.svg';
 
 function App() {
@@ -134,6 +135,9 @@ function App() {
 
             {/* Actions */}
             <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+              {/* VPN Status Badge */}
+              <VpnBadge />
+
               <button
                 onClick={() => { setIsModalOpen(true); setIsGroupDropdownOpen(false); setIsPlaylistDropdownOpen(false); }}
                 className="btn-red"
