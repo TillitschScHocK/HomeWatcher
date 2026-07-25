@@ -8,7 +8,6 @@ const ChannelSocketHandler = require('./socket/ChannelSocketHandler');
 const proxyController = require('./controllers/ProxyController');
 const centralChannelController = require('./controllers/CentralChannelController');
 const channelController = require('./controllers/ChannelController');
-const vpnController = require('./controllers/VpnController');
 const streamController = require('./services/restream/StreamController');
 const ChannelService = require('./services/ChannelService');
 const PlaylistSocketHandler = require('./socket/PlaylistSocketHandler');
@@ -29,9 +28,6 @@ apiRouter.delete('/:channelId', channelController.deleteChannel);
 apiRouter.put('/:channelId', channelController.updateChannel);
 apiRouter.post('/', channelController.addChannel);
 app.use('/api/channels', apiRouter);
-
-// VPN status endpoint (server-side IP check)
-app.get('/api/vpn-status', vpnController.getVpnStatus);
 
 const proxyRouter = express.Router();
 proxyRouter.get('/channel', proxyController.channel);

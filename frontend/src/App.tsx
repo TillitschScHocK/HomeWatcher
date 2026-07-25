@@ -10,7 +10,6 @@ import SettingsModal from './components/SettingsModal';
 import TvPlaylistModal from './components/TvPlaylistModal';
 import { ToastProvider } from './components/notifications/ToastContext';
 import ToastContainer from './components/notifications/ToastContainer';
-import VpnBadge from './components/VpnBadge';
 import spatenLogo from './assets/spaten.svg';
 
 function App() {
@@ -108,17 +107,7 @@ function App() {
               <img
                 src={spatenLogo}
                 alt="HomeWatcher logo"
-                style={{
-                  width: '20px',
-                  height: '20px',
-                  minWidth: '20px',
-                  minHeight: '20px',
-                  maxWidth: '20px',
-                  maxHeight: '20px',
-                  objectFit: 'contain',
-                  opacity: 0.9,
-                  flexShrink: 0,
-                }}
+                className="w-6 h-6 object-contain opacity-90"
               />
               <span
                 className="text-base font-bold tracking-tight"
@@ -145,9 +134,6 @@ function App() {
 
             {/* Actions */}
             <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
-              {/* VPN Status Badge */}
-              <VpnBadge />
-
               <button
                 onClick={() => { setIsModalOpen(true); setIsGroupDropdownOpen(false); setIsPlaylistDropdownOpen(false); }}
                 className="btn-red"
