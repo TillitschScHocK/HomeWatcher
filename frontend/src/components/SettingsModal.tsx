@@ -10,36 +10,59 @@ interface SettingsModalProps {
 function SettingsModal({ isOpen, onClose, syncEnabled, onSyncChange }: SettingsModalProps) {
   if (!isOpen) return null;
 
-return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-gray-800 rounded-lg w-full max-w-md">
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-semibold">Einstellungen</h2>
+  return (
+    <div className="hw-modal-overlay">
+      <div className="hw-modal w-full max-w-md">
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: '1px solid var(--border)' }}
+        >
+          <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Settings</h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-700 rounded-full transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+            style={{ color: 'var(--text-muted)' }}
+            aria-label="Close"
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-surface-2)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Clock className="w-5 h-5 text-blue-400" />
+        {/* Body */}
+        <div className="p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                style={{ background: 'var(--brand-red-alpha)' }}
+              >
+                <Clock className="w-4 h-4" style={{ color: 'var(--brand-red)' }} />
+              </div>
               <div>
-                <h3 className="font-medium">Stream-Synchronisation</h3>
-                <p className="text-sm text-gray-400">Hält die Stream-Wiedergabe mit deinen Freunden synchron. Dies führt zu längeren Ladezeiten.</p>
+                <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Stream Synchronisation</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Keeps stream playback in sync with other viewers. Increases initial load time.
+                </p>
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
+
+            {/* Toggle */}
+            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-1">
               <input
                 type="checkbox"
                 className="sr-only peer"
                 checked={syncEnabled}
-                onChange={(e) => onSyncChange(e.target.checked)}
+                onChange={e => onSyncChange(e.target.checked)}
               />
-              <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+              <div
+                className="w-10 h-5 rounded-full peer peer-checked:after:translate-x-5 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"
+                style={{
+                  background: syncEnabled ? 'var(--brand-red)' : 'var(--bg-surface-3)',
+                }}
+              />
             </label>
           </div>
         </div>

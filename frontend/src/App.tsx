@@ -10,6 +10,7 @@ import SettingsModal from './components/SettingsModal';
 import TvPlaylistModal from './components/TvPlaylistModal';
 import { ToastProvider } from './components/notifications/ToastContext';
 import ToastContainer from './components/notifications/ToastContainer';
+import spatenLogo from './assets/spaten.svg';
 
 function App() {
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -23,8 +24,8 @@ function App() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [editChannel, setEditChannel] = useState<Channel | null>(null);
-  const [selectedPlaylist, setSelectedPlaylist] = useState<string>('Alle Sender');
-  const [selectedGroup, setSelectedGroup] = useState<string>('Kategorie');
+  const [selectedPlaylist, setSelectedPlaylist] = useState<string>('All Channels');
+  const [selectedGroup, setSelectedGroup] = useState<string>('Category');
   const [isPlaylistDropdownOpen, setIsPlaylistDropdownOpen] = useState(false);
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
 
@@ -43,26 +44,26 @@ function App() {
 
   const playlists = useMemo(() => {
     const unique = new Set(channels.map(c => c.playlistName).filter(Boolean));
-    return ['Alle Sender', ...Array.from(unique)];
+    return ['All Channels', ...Array.from(unique)];
   }, [channels]);
 
   const filteredChannels = useMemo(() => {
-    let list = selectedPlaylist === 'Alle Sender' ? channels : channels.filter(c => c.playlistName === selectedPlaylist);
-    list = selectedGroup === 'Kategorie' ? list : list.filter(c => c.group === selectedGroup);
+    let list = selectedPlaylist === 'All Channels' ? channels : channels.filter(c => c.playlistName === selectedPlaylist);
+    list = selectedGroup === 'Category' ? list : list.filter(c => c.group === selectedGroup);
     return list.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [channels, selectedPlaylist, selectedGroup, searchQuery]);
 
   const groups = useMemo(() => {
-    const base = selectedPlaylist === 'Alle Sender' ? channels : channels.filter(c => c.playlistName === selectedPlaylist);
+    const base = selectedPlaylist === 'All Channels' ? channels : channels.filter(c => c.playlistName === selectedPlaylist);
     const unique = new Set(base.map(c => c.group).filter(Boolean));
-    return ['Kategorie', ...Array.from(unique)];
+    return ['Category', ...Array.from(unique)];
   }, [selectedPlaylist, channels]);
 
   useEffect(() => {
     apiService.request<Channel[]>('/channels/', 'GET').then(setChannels).catch(console.error);
     apiService.request<Channel>('/channels/current', 'GET').then(setSelectedChannel).catch(console.error);
 
-    const onAdded   = (ch: Channel) => setChannels(prev => [...prev, ch]);
+    const onAdded    = (ch: Channel) => setChannels(prev => [...prev, ch]);
     const onSelected = (ch: Channel) => setSelectedChannel(ch);
     const onUpdated  = (ch: Channel) => {
       setChannels(prev => prev.map(c => c.id === ch.id ? ch : c));
@@ -76,17 +77,17 @@ function App() {
     };
     const onDeleted = (id: number) => setChannels(prev => prev.filter(c => c.id !== id));
 
-    socketService.subscribeToEvent('channel-added',   onAdded);
+    socketService.subscribeToEvent('channel-added',    onAdded);
     socketService.subscribeToEvent('channel-selected', onSelected);
-    socketService.subscribeToEvent('channel-updated', onUpdated);
-    socketService.subscribeToEvent('channel-deleted', onDeleted);
+    socketService.subscribeToEvent('channel-updated',  onUpdated);
+    socketService.subscribeToEvent('channel-deleted',  onDeleted);
     socketService.connect();
 
     return () => {
-      socketService.unsubscribeFromEvent('channel-added',   onAdded);
+      socketService.unsubscribeFromEvent('channel-added',    onAdded);
       socketService.unsubscribeFromEvent('channel-selected', onSelected);
-      socketService.unsubscribeFromEvent('channel-updated', onUpdated);
-      socketService.unsubscribeFromEvent('channel-deleted', onDeleted);
+      socketService.unsubscribeFromEvent('channel-updated',  onUpdated);
+      socketService.unsubscribeFromEvent('channel-deleted',  onDeleted);
       socketService.disconnect();
     };
   }, []);
@@ -101,18 +102,19 @@ function App() {
         <header className="hw-header">
           <div className="container mx-auto px-4 py-3 flex items-center gap-4">
 
-            {/* Logo */}
-            <a href="/" className="flex items-center gap-2.5 flex-shrink-0 hover-lift" aria-label="HomeWatcher">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: 'var(--brand-red)' }}
+            {/* Brand / Logo */}
+            <a href="/" className="flex items-center gap-2 flex-shrink-0 hover-lift" aria-label="HomeWatcher">
+              <img
+                src={spatenLogo}
+                alt="HomeWatcher logo"
+                className="w-6 h-6 object-contain opacity-90"
+              />
+              <span
+                className="text-base font-bold tracking-tight"
+                style={{ color: 'var(--text-primary)' }}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round"/>
-                  <path d="M9 21V12h6v9" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round"/>
-                </svg>
-              </div>
-              <span className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>HomeWatcher</span>
+                Home<span style={{ color: 'var(--brand-red)' }}>Watcher</span>
+              </span>
             </a>
 
             {/* Search */}
@@ -123,7 +125,7 @@ function App() {
               />
               <input
                 type="text"
-                placeholder="Kanäle suchen…"
+                placeholder="Search channels…"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="hw-search w-full pl-10 pr-4 py-2.5 text-sm"
@@ -137,26 +139,30 @@ function App() {
                 className="btn-red"
               >
                 <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Sender</span>
+                <span className="hidden sm:inline">Add</span>
               </button>
             </div>
           </div>
         </header>
 
         {/* ── Main ──────────────────────────────────────────────────── */}
-        <main className="container mx-auto px-4 py-6 space-y-5">
+        <main className="container mx-auto px-4 py-6 space-y-4">
 
           {/* Channel Panel */}
           <section className="hw-card p-5">
-            {/* Panel Toolbar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-3">
 
+            {/* Panel Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+              <div className="flex items-center gap-2">
+                <span className="section-label">Channels</span>
+              </div>
+
+              <div className="flex items-center gap-2">
                 {/* Playlist Dropdown */}
                 <div className="relative" ref={playlistRef}>
                   <button
                     onClick={() => { setIsPlaylistDropdownOpen(o => !o); setIsGroupDropdownOpen(false); }}
-                    className="btn-ghost text-sm font-semibold"
+                    className="btn-ghost text-sm"
                     style={isPlaylistDropdownOpen ? { color: 'var(--brand-red)', borderColor: 'var(--brand-red)' } : {}}
                   >
                     <Tv2 className="w-4 h-4" />
@@ -172,7 +178,7 @@ function App() {
                         {playlists.map(pl => (
                           <button
                             key={pl}
-                            onClick={() => { setSelectedPlaylist(pl); setSelectedGroup('Kategorie'); setIsPlaylistDropdownOpen(false); }}
+                            onClick={() => { setSelectedPlaylist(pl); setSelectedGroup('Category'); setIsPlaylistDropdownOpen(false); }}
                             className={`hw-dropdown-item ${selectedPlaylist === pl ? 'is-active' : ''}`}
                           >{pl}</button>
                         ))}
@@ -203,18 +209,21 @@ function App() {
                             key={g}
                             onClick={() => { setSelectedGroup(g); setIsGroupDropdownOpen(false); }}
                             className={`hw-dropdown-item ${selectedGroup === g ? 'is-active' : ''}`}
-                          >{g === 'Kategorie' ? 'Alle Kategorien' : g}</button>
+                          >{g === 'Category' ? 'All Categories' : g}</button>
                         ))}
                       </div>
                     </div>
                   )}
                 </div>
-              </div>
 
-              {/* Channel count badge */}
-              <span className="text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: 'var(--bg-surface-2)', color: 'var(--text-muted)' }}>
-                {filteredChannels.length} Sender
-              </span>
+                {/* Channel count badge */}
+                <span
+                  className="text-xs font-bold px-2.5 py-1 rounded-md"
+                  style={{ background: 'var(--bg-surface-2)', color: 'var(--text-faint)', letterSpacing: '0.04em' }}
+                >
+                  {filteredChannels.length}
+                </span>
+              </div>
             </div>
 
             <ChannelList

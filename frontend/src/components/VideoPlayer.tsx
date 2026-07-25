@@ -50,7 +50,7 @@ function VideoPlayer({ channel, syncEnabled }: VideoPlayerProps) {
 
       clearToasts();
       let toastStartId: string | null = null;
-      toastStartId = addToast({ type: 'loading', title: 'Stream wird gestartet', message: 'Einen Moment bitte…', duration: 0 });
+      toastStartId = addToast({ type: 'loading', title: 'Starting stream', message: 'Please wait…', duration: 0 });
 
       const tolerance    = Number(import.meta.env.VITE_SYNCHRONIZATION_TOLERANCE    ?? 0.8);
       const maxDeviation = Number(import.meta.env.VITE_SYNCHRONIZATION_MAX_DEVIATION ?? 4);
@@ -62,8 +62,8 @@ function VideoPlayer({ channel, syncEnabled }: VideoPlayerProps) {
           const fragments = hls.levels[0]?.details?.fragments;
           const lastFrag  = fragments?.[fragments.length - 1];
           if (!lastFrag?.programDateTime) return;
-          const timeDiff   = (now - lastFrag.programDateTime) / 1000;
-          const videoLen   = fragments!.reduce((a, f) => a + f.duration, 0);
+          const timeDiff    = (now - lastFrag.programDateTime) / 1000;
+          const videoLen    = fragments!.reduce((a, f) => a + f.duration, 0);
           const targetDelay = Number(import.meta.env.VITE_STREAM_DELAY);
           const delay = videoLen + timeDiff + tolerance + 1;
           if (delay >= targetDelay) {
@@ -84,12 +84,12 @@ function VideoPlayer({ channel, syncEnabled }: VideoPlayerProps) {
         const frag = data.frag;
         if (!frag.programDateTime) {
           if (!timeMissingErrorShown) {
-            addToast({ type: 'error', title: 'Synchronisierungsfehler', message: `Wiedergabe kann für diesen Sender (${channel.mode}) nicht synchronisiert werden.`, duration: 5000 });
+            addToast({ type: 'error', title: 'Sync Error', message: `Playback cannot be synced for this channel (${channel.mode}).`, duration: 5000 });
             timeMissingErrorShown = true;
           }
           return;
         }
-        const timeDiff = (Date.now() - frag.programDateTime) / 1000;
+        const timeDiff  = (Date.now() - frag.programDateTime) / 1000;
         const videoDiff = frag.end - video.currentTime;
         const delay = timeDiff + videoDiff;
         const targetDelay = channel.mode === 'restream' ? import.meta.env.VITE_STREAM_DELAY : import.meta.env.VITE_STREAM_PROXY_DELAY;
@@ -98,7 +98,7 @@ function VideoPlayer({ channel, syncEnabled }: VideoPlayerProps) {
           video.currentTime += deviation;
           video.playbackRate = 1.0;
         } else if (Math.abs(deviation) > tolerance) {
-          const adj = Number(import.meta.env.VITE_SYNCHRONIZATION_ADJUSTMENT ?? 0.06);
+          const adj    = Number(import.meta.env.VITE_SYNCHRONIZATION_ADJUSTMENT     ?? 0.06);
           const maxAdj = Number(import.meta.env.VITE_SYNCHRONIZATION_MAX_ADJUSTMENT ?? 0.16);
           video.playbackRate = 1 + Math.sign(deviation) * Math.min(Math.abs(adj * deviation), maxAdj);
         } else {
@@ -110,11 +110,11 @@ function VideoPlayer({ channel, syncEnabled }: VideoPlayerProps) {
         if (!data.fatal) return;
         if (toastStartId) removeToast(toastStartId);
         const messages: Record<ChannelMode, string> = {
-          direct:   'Stream nicht verfügbar. Versuche Proxy- oder Restream-Modus.',
-          proxy:    'Stream nicht verfügbar. Versuche den Restream-Modus.',
-          restream: `Stream nicht verfügbar. Quelle prüfen. ${data.response?.text ?? ''}`,
+          direct:   'Stream unavailable. Try proxy or restream mode.',
+          proxy:    'Stream unavailable. Try restream mode.',
+          restream: `Stream unavailable. Check the source. ${data.response?.text ?? ''}`,
         };
-        addToast({ type: 'error', title: 'Stream-Fehler', message: messages[channel.mode], duration: 5000 });
+        addToast({ type: 'error', title: 'Stream Error', message: messages[channel.mode], duration: 5000 });
       });
     }
     return () => hlsRef.current?.destroy();
@@ -125,7 +125,7 @@ function VideoPlayer({ channel, syncEnabled }: VideoPlayerProps) {
   };
 
   return (
-    <div className="hw-video-wrap animate-fade-in-up">
+    <div className="hw-video-wrap">
       <video
         ref={videoRef}
         className="w-full aspect-video bg-black"
@@ -144,7 +144,7 @@ function VideoPlayer({ channel, syncEnabled }: VideoPlayerProps) {
             className="w-9 h-9 object-contain rounded-lg flex-shrink-0"
           />
           <div className="flex flex-col min-w-0">
-            <span className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{channel.name}</span>
+            <span className="font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{channel.name}</span>
             <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{channel.group ?? 'Live TV'}</span>
           </div>
           <div className="ml-auto">

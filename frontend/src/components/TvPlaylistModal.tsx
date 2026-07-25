@@ -16,55 +16,64 @@ function TvPlaylistModal({ isOpen, onClose }: TvPlaylistModalProps) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(playlistUrl);
-      addToast({
-        type: 'success',
-        title: 'Playlist-URL in Zwischenablage kopiert',
-        duration: 2500,
-      });
-    } catch (err) {
-      addToast({
-        type: 'error',
-        title: 'URL konnte nicht kopiert werden',
-        message: 'Bitte kopieren Sie die URL manuell',
-        duration: 2500,
-      });
+      addToast({ type: 'success', title: 'Playlist URL copied to clipboard', duration: 2500 });
+    } catch {
+      addToast({ type: 'error', title: 'Could not copy URL', message: 'Please copy it manually.', duration: 2500 });
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-gray-800 rounded-lg w-full max-w-2xl">
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <div className="flex items-center space-x-2">
-            <Tv2 className="w-5 h-5 text-blue-500" />
-            <h2 className="text-xl font-semibold">TV Stream</h2>
+    <div className="hw-modal-overlay">
+      <div className="hw-modal w-full max-w-lg">
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: '1px solid var(--border)' }}
+        >
+          <div className="flex items-center gap-2">
+            <Tv2 className="w-4 h-4" style={{ color: 'var(--brand-red)' }} />
+            <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>TV Playlist</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-700 rounded-full transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+            style={{ color: 'var(--text-muted)' }}
+            aria-label="Close"
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-surface-2)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
-          <div className="flex items-center space-x-2">
+        {/* Body */}
+        <div className="p-5 space-y-4">
+          <div className="flex items-center gap-2">
             <input
               type="text"
               value={playlistUrl}
               readOnly
-              className="flex-1 bg-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 text-sm px-3 py-2.5 rounded-lg"
+              style={{
+                background: 'var(--bg-surface-2)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-secondary)',
+                outline: 'none',
+              }}
             />
             <button
               onClick={handleCopy}
-              className="p-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              className="w-10 h-10 flex items-center justify-center rounded-lg flex-shrink-0 transition-colors"
+              style={{ background: 'var(--brand-red)', color: '#fff' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--brand-red-dark)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'var(--brand-red)')}
+              aria-label="Copy playlist URL"
             >
-              <Copy className="w-5 h-5" />
+              <Copy className="w-4 h-4" />
             </button>
           </div>
-          
-          <p className="text-sm text-gray-400">
-            Verwende diese Playlist in jedem anderen IPTV-Player. Bei Problemen wenden Sie sich bitte an den Admin.
+          <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
+            Use this playlist URL in any compatible IPTV player. Contact your admin if you experience issues.
           </p>
         </div>
       </div>
