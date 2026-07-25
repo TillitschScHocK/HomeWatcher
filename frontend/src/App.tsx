@@ -108,7 +108,17 @@ function App() {
               <img
                 src={spatenLogo}
                 alt="HomeWatcher logo"
-                className="w-6 h-6 object-contain opacity-90"
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  minWidth: '20px',
+                  minHeight: '20px',
+                  maxWidth: '20px',
+                  maxHeight: '20px',
+                  objectFit: 'contain',
+                  opacity: 0.9,
+                  flexShrink: 0,
+                }}
               />
               <span
                 className="text-base font-bold tracking-tight"
