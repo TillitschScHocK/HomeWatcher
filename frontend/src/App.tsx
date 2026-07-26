@@ -11,6 +11,7 @@ import TvPlaylistModal from './components/TvPlaylistModal';
 import { ToastProvider } from './components/notifications/ToastContext';
 import ToastContainer from './components/notifications/ToastContainer';
 import spatenLogo from './assets/spaten.svg';
+import VpnBadge from './components/VpnBadge';
 
 function App() {
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -98,7 +99,7 @@ function App() {
     <ToastProvider>
       <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
 
-        {/* ── Header ────────────────────────────────────────────────── */}
+        {/* ── Header ─────────────────────────────────────────────────────── */}
         <header className="hw-header">
           <div className="container mx-auto px-4 py-3 flex items-center gap-4">
 
@@ -134,6 +135,9 @@ function App() {
 
             {/* Actions */}
             <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+              {/* VPN status indicator — top-right of navbar */}
+              <VpnBadge />
+
               <button
                 onClick={() => { setIsModalOpen(true); setIsGroupDropdownOpen(false); setIsPlaylistDropdownOpen(false); }}
                 className="btn-red"
@@ -145,7 +149,7 @@ function App() {
           </div>
         </header>
 
-        {/* ── Main ──────────────────────────────────────────────────── */}
+        {/* ── Main ─────────────────────────────────────────────────────── */}
         <main className="container mx-auto px-4 py-6 space-y-4">
 
           {/* Channel Panel */}
@@ -238,7 +242,7 @@ function App() {
           <VideoPlayer channel={selectedChannel} syncEnabled={syncEnabled} />
         </main>
 
-        {/* ── Modals ────────────────────────────────────────────────── */}
+        {/* ── Modals ─────────────────────────────────────────────────────── */}
         {isModalOpen && (
           <ChannelModal
             onClose={() => { setIsModalOpen(false); setEditChannel(null); }}
