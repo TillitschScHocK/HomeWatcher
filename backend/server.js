@@ -12,6 +12,7 @@ const streamController = require('./services/restream/StreamController');
 const ChannelService = require('./services/ChannelService');
 const PlaylistSocketHandler = require('./socket/PlaylistSocketHandler');
 const PlaylistUpdater = require('./services/PlaylistUpdater');
+const vpnController = require('./controllers/VpnController');
 
 dotenv.config();
 
@@ -28,6 +29,9 @@ apiRouter.delete('/:channelId', channelController.deleteChannel);
 apiRouter.put('/:channelId', channelController.updateChannel);
 apiRouter.post('/', channelController.addChannel);
 app.use('/api/channels', apiRouter);
+
+// VPN status endpoint — result is cached in-process for 60 s
+app.get('/api/vpn-status', vpnController.getVpnStatus);
 
 const proxyRouter = express.Router();
 proxyRouter.get('/channel', proxyController.channel);
