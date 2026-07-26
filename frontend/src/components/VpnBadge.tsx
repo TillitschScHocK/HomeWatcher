@@ -1,31 +1,39 @@
 import { useEffect, useState } from 'react';
 import { Server, AlertCircle } from 'lucide-react';
 import apiService from '../services/ApiService';
+import './VpnStatusBadge.css';
 
 interface VpnStatus {
-  active: boolean | null;
-  ip: string | null;
-  org: string | null;
-  country: string | null;
-  error?: string;
+  vpnActive:  boolean | null;
+  exitIp:     string | null;
+  checkedAt:  string | null;
+  error?:     string;
 }
 
+const POLL_INTERVAL_MS = 60 * 1000;
+
 export default function VpnBadge() {
-  const [status, setStatus]       = useState<VpnStatus | null>(null);
+  const [status, setStatus]         = useState<VpnStatus | null>(null);
   const [fetchError, setFetchError] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
 
-  // Single fetch on mount only
-  useEffect(() => {
+  function poll() {
     apiService.request<VpnStatus>('/vpn-status', 'GET')
       .then(data => {
-        if (data.error && !data.ip) {
+        if (data.error && !data.exitIp) {
           setFetchError(true);
         } else {
+          setFetchError(false);
           setStatus(data);
         }
       })
       .catch(() => setFetchError(true));
+  }
+
+  useEffect(() => {
+    poll();
+    const id = setInterval(poll, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
   }, []);
 
   // Loading state
@@ -38,7 +46,7 @@ export default function VpnBadge() {
   }
 
   // Error state
-  if (fetchError || !status?.ip) {
+  if (fetchError || !status?.exitIp) {
     return (
       <div
         className="vpn-badge vpn-off"
@@ -61,13 +69,15 @@ export default function VpnBadge() {
     );
   }
 
-  // Determine badge color: only if active is explicitly boolean
-  const hasVpnCheck = status.active !== null;
+  // Determine badge colour: only when vpnActive is explicitly boolean
+  const hasVpnCheck = status.vpnActive !== null;
   const badgeClass  = hasVpnCheck
-    ? (status.active ? 'vpn-on' : 'vpn-off')
-    : 'vpn-on'; // neutral green when no env-var check configured
+    ? (status.vpnActive ? 'vpn-on' : 'vpn-off')
+    : 'vpn-on'; // neutral green when no env-var check is configured
 
-  const label = `Server ${status.ip}`;
+  const label = hasVpnCheck
+    ? (status.vpnActive ? 'VPN active' : 'VPN inactive')
+    : `Server ${status.exitIp}`;
 
   return (
     <div
@@ -82,24 +92,17 @@ export default function VpnBadge() {
 
       {showTooltip && (
         <div className="vpn-tooltip">
-          <span className="font-semibold">🖥️ Server-IP</span>
-          <span className="vpn-tooltip-ip">{status.ip}</span>
-          {status.org && (
-            <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
-              {status.org}
-            </span>
-          )}
-          {status.country && (
-            <span style={{ fontSize: '0.65rem', opacity: 0.6 }}>{status.country}</span>
-          )}
-          {hasVpnCheck && (
-            <span style={{ fontSize: '0.63rem', opacity: 0.7, marginTop: '2px' }}>
-              {status.active ? '🔒 VPN aktiv' : '⚠️ Kein VPN erkannt'}
-            </span>
-          )}
-          <span style={{ fontSize: '0.63rem', opacity: 0.5, marginTop: '2px' }}>
-            einmalig beim Laden
+          <span className="font-semibold">
+            {hasVpnCheck
+              ? (status.vpnActive ? '🔒 VPN aktiv' : '⚠️ Kein VPN erkannt')
+              : '🖥️ Server-IP'}
           </span>
+          <span className="vpn-tooltip-ip">{status.exitIp}</span>
+          {status.checkedAt && (
+            <span style={{ fontSize: '0.63rem', opacity: 0.5, marginTop: '2px' }}>
+              {new Date(status.checkedAt).toLocaleTimeString()}
+            </span>
+          )}
         </div>
       )}
     </div>
